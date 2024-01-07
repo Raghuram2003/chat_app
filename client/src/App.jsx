@@ -1,12 +1,16 @@
+import axios from "axios"
 
+// import { useContext } from "react"
+import {  UserContextProvider } from "./UserContext"
+import Routes from "./Routes"
 function App() {
-
+  axios.defaults.withCredentials = true
 
   return (
-    <div className="bg-red-100">
-      test
-    </div>
-  )
+      <UserContextProvider>
+          <Routes/>
+      </UserContextProvider>
+    )
 }
 
 export default App
