@@ -6,7 +6,7 @@ export default function Routes(){
     const {id,username} = useContext(UserContext)
     if(username && id){
         return(
-                <div>logged in</div>
+                <div>logged in as {username}</div>
             )
     }
     return(

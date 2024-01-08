@@ -54,6 +54,22 @@ app.get("/api/profile",(req,res)=>{
     
 })
 
+app.post("/api/login",async(req,res)=>{
+    const {username,password} = req.body;
+    const foundUser =await User.findOne({username});
+    const authenticated = bcrypt.compareSync(password,foundUser.password)
+    console.log(authenticated)
+    if(authenticated){
+        jwt.sign({userId : foundUser._id,username},secret,{},(err,token)=>{
+            if(err) throw err;
+            res.cookie('token',token).status(201).json({
+                id : foundUser._id
+            })
+        })
+    }else{res.status(401).send("no in")}
+    
+})
+
 app.listen(PORT,()=>{
     console.log(`server listening at ${PORT}`);
 })
