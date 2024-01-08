@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { UserContext } from "./UserContext";
 import Avatar from "./Avatar";
 import Logo from "./Logo";
@@ -12,6 +12,7 @@ export default function Chat() {
   const [newMessageText, setNewMessageText] = useState("");
   const [messages, setMessages] = useState([]);
   const [onlinePeople, setOnlinePeople] = useState({});
+  const messageRef = useRef();
   useEffect(() => {
     const ws = new WebSocket("ws://localhost:4040");
     console.log(ws);
@@ -19,7 +20,12 @@ export default function Chat() {
     ws.addEventListener("message", handleMessage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
+  useEffect(() => {
+    const div = messageRef.current;
+    if (div) {
+      div.scrollTop = div.scrollIntoView({ behaviour: "smooth", block: "end" });
+    }
+  }, [messages]);
   function showOnlinePeople(peopleArray) {
     const people = {};
     peopleArray.forEach((person) => {
@@ -48,12 +54,18 @@ export default function Chat() {
         },
       })
     );
-    setMessages((prev) => ([
+    setMessages((prev) => [
       ...prev,
-      { text: newMessageText, sender: id, recepient: selectedUserId , id : Date.now()},
-    ]));
+      {
+        text: newMessageText,
+        sender: id,
+        recepient: selectedUserId,
+        id: Date.now(),
+      },
+    ]);
     setNewMessageText("");
   }
+
   const onlinePeopleExclOurUser = { ...onlinePeople };
   delete onlinePeopleExclOurUser[id];
   const messagesWithoutDupes = uniqBy(messages, "id");
@@ -90,15 +102,29 @@ export default function Chat() {
             </div>
           )}
           {!!selectedUserId && (
-            <div className="overflow-y-scroll">
-              {messagesWithoutDupes.map((message) => (
-                <div key={message.id} className={(message.sender===id ? "text-right" : "text-left")}>
-                    <div  className={"text-left inline-block p-2 m-2 rounded-md text-sm "+(message.sender===id ? "bg-blue-500 text-white" : "bg-white text-gray-500")}>
-                        {message.text}
+            <div className="relative h-full">
+              <div className="overflow-y-scroll absolute top-0 left-0 right-0 bottom-2">
+                {messagesWithoutDupes.map((message) => (
+                  <div
+                    key={message.id}
+                    className={
+                      message.sender === id ? "text-right" : "text-left"
+                    }
+                  >
+                    <div
+                      className={
+                        "text-left inline-block p-2 m-2 rounded-md text-sm " +
+                        (message.sender === id
+                          ? "bg-blue-500 text-white"
+                          : "bg-white text-gray-500")
+                      }
+                    >
+                      {message.text}
                     </div>
-                </div>
-                
-              ))}
+                  </div>
+                ))}
+                <div ref={messageRef}></div>
+              </div>
             </div>
           )}
         </div>
