@@ -35,7 +35,10 @@ function verifyJWT(req,res,next){
 app.get("/test", (req, res) => {
   res.json("test ok");
 });
+
+
 const secret = process.env.JWT_SECRET;
+
 app.post("/api/register", async (req, res) => {
   const { username, password } = req.body;
   const hashedPassword = bcrypt.hashSync(password, salt);
@@ -61,7 +64,7 @@ app.get("/api/profile", (req, res) => {
       res.json(data);
     });
   } else {
-    res.status(401).json("no token");
+    res.status(401).json("no token")  ;
   }
 });
 
@@ -91,6 +94,15 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
+app.post("/api/logout",(req,res)=>{
+  res.cookie('token','').json('ok')
+})
+
+app.get("/api/people",async(req,res)=>{
+  const users = await User.find({},{'_id':1,'username':1});
+  res.json(users)
+})
+
 app.get("/api/getMessages/:userId",verifyJWT,async(req,res)=>{
   const selectedUserId = req.params.userId
   const ourUserId = req.userData.userId
@@ -110,6 +122,37 @@ const server = app.listen(PORT, () => {
 const wss = new WebSocketServer({ server });
 wss.on("connection", (con, req) => {
   // get username and userId from the cookie
+
+  function notifyOnlinePeople(){
+    [...wss.clients].forEach((client) => {
+      client.send(
+        JSON.stringify({
+          online: [...wss.clients].map((c) => ({
+            userId: c.userId,
+            username: c.username,
+          })),
+        })
+      );
+    }
+    )
+  }
+
+  con.isAlive = true;
+  con.timer = setInterval(()=>{
+    con.ping()
+    con.deathTimer = setTimeout(()=>{
+       con.isAlive = false;
+       clearInterval(con.timer)
+       con.terminate();
+       notifyOnlinePeople();
+      //  console.log("dead");
+    },1000)
+  },5000)
+
+  con.on('pong',()=>{
+    clearTimeout(con.deathTimer)
+  })
+
   const tokenCookieString = req.headers.cookie
     .split(";")
     .find((str) => str.startsWith("token="));
@@ -145,16 +188,8 @@ wss.on("connection", (con, req) => {
           })));
     }
   });
+
   //send the online users to every online client
-  [...wss.clients].forEach((client) => {
-    client.send(
-      JSON.stringify({
-        online: [...wss.clients].map((c) => ({
-          userId: c.userId,
-          username: c.username,
-        })),
-      })
-    );
+  notifyOnlinePeople()
   });
-});
 wss.on("error", console.error);
