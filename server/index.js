@@ -17,8 +17,19 @@ const salt = bcrypt.genSaltSync(10);
 try {
   const db = mongoose.connect(process.env.MONGO_URL);
   console.log("db connected");
-} catch (err) {
+} catch (e) {
   console.log("db not connected");
+}
+
+function verifyJWT(req,res,next){
+  const token = req.cookies?.token;
+  if(token){
+    jwt.verify(token,secret,{},(err,data)=>{
+     if (err) throw err;
+     req.userData = data;
+    })
+  }
+  next();
 }
 
 app.get("/test", (req, res) => {
@@ -80,6 +91,18 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
+app.get("/api/getMessages/:userId",verifyJWT,async(req,res)=>{
+  const selectedUserId = req.params.userId
+  const ourUserId = req.userData.userId
+  // const selectedUserRef = await User.findOne({_id:selectedUserId});
+  // const ourUserRef = await User.findOne({_id : ourUserId})
+  const messages = await Message.find({
+    sender : {$in : [ourUserId,selectedUserId]},
+    recepient : {$in : [ourUserId,selectedUserId]}
+  }).sort({createdAt:1});
+  res.json(messages)
+})
+
 const server = app.listen(PORT, () => {
   console.log(`server listening at ${PORT}`);
 });
@@ -117,7 +140,7 @@ wss.on("connection", (con, req) => {
         .forEach((c) => c.send(JSON.stringify({ 
           text,
           sender: con.userId,
-          id : messageDoc._id ,
+          _id : messageDoc._id ,
           recepient
           })));
     }

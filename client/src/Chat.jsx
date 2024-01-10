@@ -4,7 +4,7 @@ import Avatar from "./Avatar";
 import Logo from "./Logo";
 import SendButton from "./SendButton";
 import { uniqBy } from "lodash";
-
+import axios from "axios";
 export default function Chat() {
   const [ws, setWs] = useState(null);
   const { username, id } = useContext(UserContext);
@@ -26,6 +26,17 @@ export default function Chat() {
       div.scrollTop = div.scrollIntoView({ behaviour: "smooth", block: "end" });
     }
   }, [messages]);
+
+  useEffect(()=>{
+    if(selectedUserId){
+      axios.get("/api/getMessages/"+selectedUserId)
+      .then(res=>{
+        console.log(res.data);
+        setMessages([...res.data])
+      });
+  }
+  },[selectedUserId])
+  
   function showOnlinePeople(peopleArray) {
     const people = {};
     peopleArray.forEach((person) => {
@@ -60,7 +71,7 @@ export default function Chat() {
         text: newMessageText,
         sender: id,
         recepient: selectedUserId,
-        id: Date.now(),
+        _id: Date.now(),
       },
     ]);
     setNewMessageText("");
@@ -68,7 +79,7 @@ export default function Chat() {
 
   const onlinePeopleExclOurUser = { ...onlinePeople };
   delete onlinePeopleExclOurUser[id];
-  const messagesWithoutDupes = uniqBy(messages, "id");
+  const messagesWithoutDupes = uniqBy(messages, "_id");
   return (
     <div className="flex h-screen">
       <div className="bg-white w-1/3">
@@ -106,7 +117,7 @@ export default function Chat() {
               <div className="overflow-y-scroll absolute top-0 left-0 right-0 bottom-2">
                 {messagesWithoutDupes.map((message) => (
                   <div
-                    key={message.id}
+                    key={message._id}
                     className={
                       message.sender === id ? "text-right" : "text-left"
                     }
