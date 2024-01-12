@@ -4,7 +4,7 @@ import PropTypes from 'prop-types';
 Contact.propTypes = {
   onClick: PropTypes.func.isRequired,
   userId: PropTypes.string.isRequired,
-  selectedUserId: PropTypes.string.isRequired,
+  selectedUserId: PropTypes.string,
   username: PropTypes.string.isRequired,
   online: PropTypes.bool.isRequired,
 };

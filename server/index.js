@@ -7,13 +7,14 @@ import cookieParser from "cookie-parser";
 import bcrypt from "bcryptjs";
 import WebSocket, { WebSocketServer } from "ws";
 import { Message } from "./models/Message.js";
+import fs from 'fs'
 config();
 const app = express();
 app.use(express.json());
 app.use(cookieParser());
 const PORT = 4040;
 const salt = bcrypt.genSaltSync(10);
-
+app.use('/uploads', express.static('./uploads'));
 try {
   const db = mongoose.connect(process.env.MONGO_URL);
   console.log("db connected");
@@ -169,14 +170,27 @@ wss.on("connection", (con, req) => {
   con.on("message", async (message, isBinary) => {
     // console.log(message)
     const messageData = JSON.parse(message.toString("utf-8"));
-    console.log(messageData);
-    const { recepient, text } = messageData.message;
+    // console.log(messageData);
+    const { recepient, text ,file} = messageData.message;
+    let fileName = null
+    if(file){
+      console.log(file.data)
+      const parts = file.name.split(".");
+      const ext = parts[parts.length - 1];
+      fileName = Date.now() + "." + ext;
+      const path = "./uploads/" + fileName
+      const bufferData = new Buffer.from(file.data.split(",")[1],'base64')
+      fs.writeFile(path,bufferData,()=>{
+        console.log("file saved at " , path)
+      })
+    } 
     // console.log(recepient,text);
-    if (recepient && text) {
+    if ((recepient && text) || (recepient && file)) {
       const messageDoc = await Message.create({
         sender: con.userId,
         recepient,
         text,
+        file : fileName 
       });
       [...wss.clients]
         .filter((c) => c.userId === recepient)
@@ -184,7 +198,8 @@ wss.on("connection", (con, req) => {
           text,
           sender: con.userId,
           _id : messageDoc._id ,
-          recepient
+          recepient,
+          file : fileName 
           })));
     }
   });

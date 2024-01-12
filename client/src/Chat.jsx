@@ -1,6 +1,5 @@
 import { useContext, useEffect, useRef, useState } from "react";
 import { UserContext } from "./UserContext";
-import Avatar from "./Avatar";
 import Logo from "./Logo";
 import SendButton from "./SendButton";
 import { uniqBy } from "lodash";
@@ -33,7 +32,7 @@ export default function Chat() {
   useEffect(() => {
     if (selectedUserId) {
       axios.get("/api/getMessages/" + selectedUserId).then((res) => {
-        console.log(res.data);
+        // console.log(res.data);
         setMessages([...res.data]);
       });
     }
@@ -42,7 +41,7 @@ export default function Chat() {
   //get offline people by filterin all users from online people
   useEffect(() => {
     axios.get("/api/people").then((res) => {
-      console.log(res.data, id);
+      // console.log(res.data, id);
       const offlinePeopleArr = res.data
         .filter((person) => person._id !== id)
         .filter((p) => !Object.keys(onlinePeople).includes(p._id));
@@ -50,14 +49,14 @@ export default function Chat() {
       offlinePeopleArr.forEach((p) => {
         offlinePeople[p._id] = p.username;
       });
-      console.log(offlinePeople);
+      // console.log(offlinePeople);
       setOfflinePeople(offlinePeople);
     });
   }, [onlinePeople]);
 
   function connectToWs() {
     const ws = new WebSocket("ws://localhost:4040");
-    console.log(ws);
+    // console.log(ws);
     setWs(ws);
     ws.addEventListener("message", handleMessage);
     ws.addEventListener("close", () => connectToWs());
@@ -68,7 +67,7 @@ export default function Chat() {
     peopleArray.forEach((person) => {
       people[person.userId] = person.username;
     });
-    console.log(people);
+    // console.log(people);
     setOnlinePeople(people);
   }
 
@@ -77,40 +76,63 @@ export default function Chat() {
     if ("online" in messageData) {
       showOnlinePeople(messageData.online);
     } else if ("text" in messageData) {
-      console.log(messageData);
-      setMessages((prev) => [...prev, { ...messageData }]);
+      // console.log(messageData);
+      if(messageData.sender===selectedUserId){
+        setMessages((prev) => [...prev, { ...messageData }]);
+      }
     }
   }
-  function sendMessage(ev) {
-    ev.preventDefault();
+  function sendMessage(ev, file = null) {
+    if (ev) ev.preventDefault();
     ws.send(
       JSON.stringify({
         message: {
           recepient: selectedUserId,
           text: newMessageText,
+          file: file || null,
         },
       })
     );
-    setMessages((prev) => [
-      ...prev,
-      {
-        text: newMessageText,
-        sender: id,
-        recepient: selectedUserId,
-        _id: Date.now(),
-      },
-    ]);
-    setNewMessageText("");
+    // setTimeout(100);
+    if (file) {
+      axios.get("/api/getMessages/" + selectedUserId).then((res) => {
+        // console.log(res.data);
+        setMessages([...res.data]);
+      });
+    } else {
+      setMessages((prev) => [
+        ...prev,
+        {
+          text: newMessageText,
+          sender: id,
+          recepient: selectedUserId,
+          _id: Date.now(),
+        },
+      ]);
+      setNewMessageText("");
+    }
   }
-  
-  function logout(){
-    axios.post("/api/logout").then(()=>{
+
+  function logout() {
+    axios.post("/api/logout").then(() => {
       setWs(null);
       setId(null);
       setUsername(null);
-    })
-    
+    });
   }
+
+  function sendFile(ev) {
+    console.log(ev.target.files[0]);
+    const reader = new FileReader();
+    reader.readAsDataURL(ev.target.files[0]);
+    reader.onload = () => {
+      sendMessage(null, {
+        name: ev.target.files[0].name,
+        data: reader.result,
+      });
+    };
+  }
+
   const onlinePeopleExclOurUser = { ...onlinePeople };
   delete onlinePeopleExclOurUser[id];
   const messagesWithoutDupes = uniqBy(messages, "_id");
@@ -141,10 +163,21 @@ export default function Chat() {
           ))}
         </div>
         <div className="p-2 text-center flex items-center justify-center">
-        <span className="mr-2 text-gray-600 text-sm flex item-center">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
-            <path fillRule="evenodd" d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" clipRule="evenodd" />
-          </svg>{username}</span>
+          <span className="mr-2 text-gray-600 text-sm flex item-center">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              className="w-6 h-6"
+            >
+              <path
+                fillRule="evenodd"
+                d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z"
+                clipRule="evenodd"
+              />
+            </svg>
+            {username}
+          </span>
           <button
             className="text-sm text-gray-500 bg-blue-100 py-1 px-2 border rounded-sm"
             onClick={() => {
@@ -183,6 +216,34 @@ export default function Chat() {
                       }
                     >
                       {message.text}
+                      {message.file && (
+                        <div className="flex gap-2 items-center">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            strokeWidth={1.5}
+                            stroke="currentColor"
+                            className="w-5 h-5"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13"
+                            />
+                          </svg>
+                          <a
+                            href={
+                              "http://localhost:4040/uploads/" + message.file
+                            }
+                            rel="noreferrer"
+                            target="_blank"
+                            className="underline"
+                          >
+                            {message.file}
+                          </a>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -201,6 +262,23 @@ export default function Chat() {
                 placeholder="type your message"
                 className="bg-white border p-2 flex-grow rounded-sm"
               />
+              <label className="bg-blue-500 text-gray-200 p-2 rounded-sm cursor-pointer">
+                <input type="file" className="hidden" onChange={sendFile} />
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.5}
+                  stroke="currentColor"
+                  className="w-6 h-6"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13"
+                  />
+                </svg>
+              </label>
               <button
                 className="bg-blue-500 text-white p-2 rounded-sm"
                 type="submit"
