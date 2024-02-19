@@ -73,17 +73,22 @@ export default function Chat() {
 
   function handleMessage(ev) {
     const messageData = JSON.parse(ev.data);
+    console.log(messageData);
     if ("online" in messageData) {
       showOnlinePeople(messageData.online);
     } else if ("text" in messageData) {
       // console.log(messageData);
-      if(messageData.sender===selectedUserId){
+      console.log(messageData);
+      if (messageData.sender === selectedUserId) {
         setMessages((prev) => [...prev, { ...messageData }]);
       }
     }
   }
   function sendMessage(ev, file = null) {
-    if (ev) ev.preventDefault();
+    console.log(ws);
+    if (ev) {
+      ev.preventDefault();
+    }
     ws.send(
       JSON.stringify({
         message: {
@@ -141,26 +146,28 @@ export default function Chat() {
       <div className="bg-white w-1/3 flex flex-col">
         <div className="flex-grow">
           <Logo />
-          {Object.keys(onlinePeopleExclOurUser).map((userId) => (
-            <Contact
-              selectedUserId={selectedUserId}
-              userId={userId}
-              onClick={setSelectedUserId}
-              key={userId}
-              username={onlinePeople[userId]}
-              online={true}
-            />
-          ))}
-          {Object.keys(offlinePeople).map((userId) => (
-            <Contact
-              selectedUserId={selectedUserId}
-              userId={userId}
-              onClick={setSelectedUserId}
-              key={userId}
-              username={offlinePeople[userId]}
-              online={false}
-            />
-          ))}
+          {!!Object.keys(onlinePeopleExclOurUser).length &&
+            Object.keys(onlinePeopleExclOurUser).map((userId) => (
+              <Contact
+                selectedUserId={selectedUserId}
+                userId={userId}
+                onClick={setSelectedUserId}
+                key={userId}
+                username={onlinePeople[userId]}
+                online={true}
+              />
+            ))}
+          {!!Object.keys(offlinePeople).length &&
+            Object.keys(offlinePeople).map((userId) => (
+              <Contact
+                selectedUserId={selectedUserId}
+                userId={userId}
+                onClick={setSelectedUserId}
+                key={userId}
+                username={offlinePeople[userId]}
+                online={false}
+              />
+            ))}
         </div>
         <div className="p-2 text-center flex items-center justify-center">
           <span className="mr-2 text-gray-600 text-sm flex item-center">
@@ -199,7 +206,7 @@ export default function Chat() {
           )}
           {!!selectedUserId && (
             <div className="relative h-full">
-              <div className="overflow-y-scroll absolute top-0 left-0 right-0 bottom-2">
+              <div className="overflow-y-scroll  absolute top-0 left-0 right-0 bottom-2">
                 {messagesWithoutDupes.map((message) => (
                   <div
                     key={message._id}
@@ -209,7 +216,7 @@ export default function Chat() {
                   >
                     <div
                       className={
-                        "text-left inline-block p-2 m-2 rounded-md text-sm " +
+                        "text-left inline-block p-3 m-2 rounded-md text-sm " +
                         (message.sender === id
                           ? "bg-blue-500 text-white"
                           : "bg-white text-gray-500")

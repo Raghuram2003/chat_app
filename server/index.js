@@ -123,7 +123,7 @@ const server = app.listen(PORT, () => {
 const wss = new WebSocketServer({ server });
 wss.on("connection", (con, req) => {
   // get username and userId from the cookie
-
+  
   function notifyOnlinePeople(){
     [...wss.clients].forEach((client) => {
       client.send(
@@ -154,19 +154,25 @@ wss.on("connection", (con, req) => {
     clearTimeout(con.deathTimer)
   })
 
-  const tokenCookieString = req.headers.cookie
-    .split(";")
-    .find((str) => str.startsWith("token="));
-  const token = tokenCookieString.split("=")[1];
-  // console.log(token);
-  if (token) {
-    jwt.verify(token, secret, {}, (err, data) => {
-      // console.log(data);
-      const { username, userId } = data;
-      con.userId = userId;
-      con.username = username;
-    });
+  const cookies = req.headers.cookie
+  if(cookies){
+    const tokenCookieString = cookies
+      .split(";")
+      .find((str) => str.startsWith("token="));
+    if(tokenCookieString){
+      const token = tokenCookieString.split("=")[1];
+      if(token){
+        jwt.verify(token, secret, {}, (err, data) => {
+          // console.log(data);
+          const { username, userId } = data;
+          con.userId = userId;
+          con.username = username;
+        });
+      }
+    }
   }
+  
+  // console.log(token);
   con.on("message", async (message, isBinary) => {
     // console.log(message)
     const messageData = JSON.parse(message.toString("utf-8"));
@@ -192,15 +198,24 @@ wss.on("connection", (con, req) => {
         text,
         file : fileName 
       });
+      console.log(text);
+      console.log(wss.clients);
       [...wss.clients]
         .filter((c) => c.userId === recepient)
-        .forEach((c) => c.send(JSON.stringify({ 
-          text,
-          sender: con.userId,
-          _id : messageDoc._id ,
-          recepient,
-          file : fileName 
-          })));
+        .forEach((c) => 
+        { 
+          try{
+            c.send(JSON.stringify({ 
+              text,
+              sender: con.userId,
+              _id : messageDoc._id ,
+              recepient,
+              file : fileName 
+              }))
+            console.log("msg sent")
+        }catch(err) {console.log(err)};
+          
+        });
     }
   });
 

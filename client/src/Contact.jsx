@@ -23,7 +23,7 @@ export default function Contact({ onClick, userId, selectedUserId, username ,onl
       )}
       <div className="flex gap-2 items-center py-2 pl-4">
         <Avatar online={online} userId={userId} username={username} />
-        <span className="text-grey-800">{username}</span>
+        <span className="text-gray-800">{username}</span>
       </div>
     </div>
   );
