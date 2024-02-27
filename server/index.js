@@ -7,14 +7,15 @@ import cookieParser from "cookie-parser";
 import bcrypt from "bcryptjs";
 import WebSocket, { WebSocketServer } from "ws";
 import { Message } from "./models/Message.js";
-import fs from 'fs'
+import fs from "fs";
+import { Friend } from "./models/Friend.js";
 config();
 const app = express();
 app.use(express.json());
 app.use(cookieParser());
 const PORT = 4040;
 const salt = bcrypt.genSaltSync(10);
-app.use('/uploads', express.static('./uploads'));
+app.use("/uploads", express.static("./uploads"));
 try {
   const db = mongoose.connect(process.env.MONGO_URL);
   console.log("db connected");
@@ -22,13 +23,13 @@ try {
   console.log("db not connected");
 }
 
-function verifyJWT(req,res,next){
+function verifyJWT(req, res, next) {
   const token = req.cookies?.token;
-  if(token){
-    jwt.verify(token,secret,{},(err,data)=>{
-     if (err) throw err;
-     req.userData = data;
-    })
+  if (token) {
+    jwt.verify(token, secret, {}, (err, data) => {
+      if (err) throw err;
+      req.userData = data;
+    });
   }
   next();
 }
@@ -37,15 +38,14 @@ app.get("/test", (req, res) => {
   res.json("test ok");
 });
 
-
 const secret = process.env.JWT_SECRET;
 
 app.post("/api/register", async (req, res) => {
   const { username, password } = req.body;
   const hashedPassword = bcrypt.hashSync(password, salt);
-  console.log(hashedPassword);
   try {
     const newUser = await User.create({ username, password: hashedPassword });
+    const friendDoc = await Friend.create({ userId: newUser._id,username, friends: [] });
     jwt.sign({ userId: newUser._id, username }, secret, {}, (err, token) => {
       if (err) throw err;
       res.cookie("token", token).status(201).json({
@@ -65,7 +65,7 @@ app.get("/api/profile", (req, res) => {
       res.json(data);
     });
   } else {
-    res.status(401).json("no token")  ;
+    res.status(401).json("no token");
   }
 });
 
@@ -74,7 +74,6 @@ app.post("/api/login", async (req, res) => {
   const foundUser = await User.findOne({ username });
   if (foundUser) {
     const authenticated = bcrypt.compareSync(password, foundUser.password);
-    console.log(authenticated);
     if (authenticated) {
       jwt.sign(
         { userId: foundUser._id, username },
@@ -95,26 +94,40 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
-app.post("/api/logout",(req,res)=>{
-  res.cookie('token','').json('ok')
-})
+app.post("/api/logout", (req, res) => {
+  res.cookie("token", "").json("ok");
+});
 
-app.get("/api/people",async(req,res)=>{
-  const users = await User.find({},{'_id':1,'username':1});
-  res.json(users)
-})
+app.get("/api/people", async (req, res) => {
+  const users = await User.find({}, { _id: 1, username: 1 });
+  res.json(users);
+});
 
-app.get("/api/getMessages/:userId",verifyJWT,async(req,res)=>{
-  const selectedUserId = req.params.userId
-  const ourUserId = req.userData.userId
+app.get("/api/getMessages/:userId", verifyJWT, async (req, res) => {
+  const selectedUserId = req.params.userId;
+  const ourUserId = req.userData.userId;
   // const selectedUserRef = await User.findOne({_id:selectedUserId});
   // const ourUserRef = await User.findOne({_id : ourUserId})
   const messages = await Message.find({
-    sender : {$in : [ourUserId,selectedUserId]},
-    recepient : {$in : [ourUserId,selectedUserId]}
-  }).sort({createdAt:1});
-  res.json(messages)
-})
+    sender: { $in: [ourUserId, selectedUserId] },
+    recepient: { $in: [ourUserId, selectedUserId] },
+  }).sort({ createdAt: 1 });
+  res.json(messages);
+});
+
+app.post("/api/addFriend/:userId", verifyJWT, async (req, res) => {
+  const friendUserId = req.params.userId;
+  const userId = req.userData.userId;
+  try{
+    const user = await Friend.findOne({ userId });
+    const friend = await Friend.findOne({userId : friendUserId});
+    res.json({ user: user.userId, friend: friend.userId });
+  }catch(err){
+    console.log(err);
+    res.json(err);
+  }
+  
+});
 
 const server = app.listen(PORT, () => {
   console.log(`server listening at ${PORT}`);
@@ -123,8 +136,9 @@ const server = app.listen(PORT, () => {
 const wss = new WebSocketServer({ server });
 wss.on("connection", (con, req) => {
   // get username and userId from the cookie
-  
-  function notifyOnlinePeople(){
+  function notifyOnlinePeople() {
+    //all users
+    //wss.client[0].id , check for friend , if friend send updates
     [...wss.clients].forEach((client) => {
       client.send(
         JSON.stringify({
@@ -134,36 +148,34 @@ wss.on("connection", (con, req) => {
           })),
         })
       );
-    }
-    )
+    });
   }
 
   con.isAlive = true;
-  con.timer = setInterval(()=>{
-    con.ping()
-    con.deathTimer = setTimeout(()=>{
-       con.isAlive = false;
-       clearInterval(con.timer)
-       con.terminate();
-       notifyOnlinePeople();
-      //  console.log("dead");
-    },1000)
-  },5000)
+  con.timer = setInterval(() => {
+    con.ping();
+    con.deathTimer = setTimeout(() => {
+      con.isAlive = false;
+      clearInterval(con.timer);
+      con.terminate();
+      notifyOnlinePeople();
+    }, 1000);
+  }, 5000);
 
-  con.on('pong',()=>{
-    clearTimeout(con.deathTimer)
-  })
+  con.on("pong", () => {
+    clearTimeout(con.deathTimer);
+  });
 
-  const cookies = req.headers.cookie
-  if(cookies){
+  const cookies = req.headers.cookie;
+  if (cookies) {
     const tokenCookieString = cookies
       .split(";")
       .find((str) => str.startsWith("token="));
-    if(tokenCookieString){
+    if (tokenCookieString) {
       const token = tokenCookieString.split("=")[1];
-      if(token){
+      if (token) {
         jwt.verify(token, secret, {}, (err, data) => {
-          // console.log(data);
+          // //console.log(data);
           const { username, userId } = data;
           con.userId = userId;
           con.username = username;
@@ -171,55 +183,51 @@ wss.on("connection", (con, req) => {
       }
     }
   }
-  
-  // console.log(token);
+
+  // //console.log(token);
   con.on("message", async (message, isBinary) => {
-    // console.log(message)
     const messageData = JSON.parse(message.toString("utf-8"));
-    // console.log(messageData);
-    const { recepient, text ,file} = messageData.message;
-    let fileName = null
-    if(file){
-      console.log(file.data)
+    const { recepient, text, file } = messageData.message;
+    let fileName = null;
+    if (file) {
       const parts = file.name.split(".");
       const ext = parts[parts.length - 1];
       fileName = Date.now() + "." + ext;
-      const path = "./uploads/" + fileName
-      const bufferData = new Buffer.from(file.data.split(",")[1],'base64')
-      fs.writeFile(path,bufferData,()=>{
-        console.log("file saved at " , path)
-      })
-    } 
-    // console.log(recepient,text);
+      const path = "./uploads/" + fileName;
+      const bufferData = new Buffer.from(file.data.split(",")[1], "base64");
+      fs.writeFile(path, bufferData, () => {
+        console.log("file saved at ", path);
+      });
+    }
     if ((recepient && text) || (recepient && file)) {
       const messageDoc = await Message.create({
         sender: con.userId,
         recepient,
         text,
-        file : fileName 
+        file: fileName,
       });
-      console.log(text);
-      console.log(wss.clients);
+
       [...wss.clients]
         .filter((c) => c.userId === recepient)
-        .forEach((c) => 
-        { 
-          try{
-            c.send(JSON.stringify({ 
-              text,
-              sender: con.userId,
-              _id : messageDoc._id ,
-              recepient,
-              file : fileName 
-              }))
-            console.log("msg sent")
-        }catch(err) {console.log(err)};
-          
+        .forEach((c) => {
+          try {
+            c.send(
+              JSON.stringify({
+                text,
+                sender: con.userId,
+                _id: messageDoc._id,
+                recepient,
+                file: fileName,
+              })
+            );
+          } catch (err) {
+            console.log(err);
+          }
         });
     }
   });
 
   //send the online users to every online client
-  notifyOnlinePeople()
-  });
+  notifyOnlinePeople();
+});
 wss.on("error", console.error);

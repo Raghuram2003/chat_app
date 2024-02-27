@@ -14,7 +14,8 @@ export default function Chat() {
   const [onlinePeople, setOnlinePeople] = useState({});
   const [offlinePeople, setOfflinePeople] = useState({});
   const messageRef = useRef();
-
+  const searchRef = useRef(null);
+  const [friendBox, setFriendBox] = useState("");
   //connect to the ws on mount
   useEffect(() => {
     connectToWs();
@@ -36,6 +37,7 @@ export default function Chat() {
         setMessages([...res.data]);
       });
     }
+    connectToWs();
   }, [selectedUserId]);
 
   //get offline people by filterin all users from online people
@@ -68,36 +70,43 @@ export default function Chat() {
       people[person.userId] = person.username;
     });
     // console.log(people);
+
     setOnlinePeople(people);
   }
 
   function handleMessage(ev) {
     const messageData = JSON.parse(ev.data);
-    console.log(messageData);
+    // console.log(messageData);
+    console.log(messageData,messageData.sender,selectedUserId);
     if ("online" in messageData) {
       showOnlinePeople(messageData.online);
     } else if ("text" in messageData) {
       // console.log(messageData);
-      console.log(messageData);
+      // console.log(messageData);
       if (messageData.sender === selectedUserId) {
         setMessages((prev) => [...prev, { ...messageData }]);
       }
     }
   }
   function sendMessage(ev, file = null) {
-    console.log(ws);
+    // console.log(ws);
     if (ev) {
       ev.preventDefault();
     }
-    ws.send(
-      JSON.stringify({
-        message: {
-          recepient: selectedUserId,
-          text: newMessageText,
-          file: file || null,
-        },
-      })
-    );
+    try {
+      ws.send(
+        JSON.stringify({
+          message: {
+            recepient: selectedUserId,
+            text: newMessageText,
+            file: file || null,
+          },
+        })
+      );
+      console.log("ji");
+    } catch (err) {
+      console.log(err);
+    }
     // setTimeout(100);
     if (file) {
       axios.get("/api/getMessages/" + selectedUserId).then((res) => {
@@ -105,6 +114,7 @@ export default function Chat() {
         setMessages([...res.data]);
       });
     } else {
+      setNewMessageText("");
       setMessages((prev) => [
         ...prev,
         {
@@ -114,7 +124,6 @@ export default function Chat() {
           _id: Date.now(),
         },
       ]);
-      setNewMessageText("");
     }
   }
 
@@ -127,7 +136,7 @@ export default function Chat() {
   }
 
   function sendFile(ev) {
-    console.log(ev.target.files[0]);
+    // console.log(ev.target.files[0]);
     const reader = new FileReader();
     reader.readAsDataURL(ev.target.files[0]);
     reader.onload = () => {
@@ -138,14 +147,72 @@ export default function Chat() {
     };
   }
 
+  function focusSearch() {
+    searchRef.current.focus();
+  }
+
+  async function handleAddFriend(ev) {
+    ev.preventDefault();
+    console.log(friendBox);
+    const response = axios.post("/api/addFriend/" + friendBox);
+    console.log(response);
+    setFriendBox("");
+  }
+
   const onlinePeopleExclOurUser = { ...onlinePeople };
   delete onlinePeopleExclOurUser[id];
   const messagesWithoutDupes = uniqBy(messages, "_id");
+
   return (
     <div className="flex h-screen">
       <div className="bg-white w-1/3 flex flex-col">
         <div className="flex-grow">
           <Logo />
+          <div className="flex items-center justify-center gap-2 m-2">
+            <div onClick={focusSearch}>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+                className="w-6 h-6"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
+                />
+              </svg>
+            </div>
+            <input
+              type="text"
+              className="border border-black w-full p-2 rounded-sm"
+              ref={searchRef}
+              placeholder="Add Friend"
+              value={friendBox}
+              onChange={(ev) => setFriendBox(ev.target.value)}
+            />
+            <button
+              className="border border-black p-2"
+              onClick={handleAddFriend}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+                className="w-6 h-6"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 4.5v15m7.5-7.5h-15"
+                />
+              </svg>
+            </button>
+          </div>
           {!!Object.keys(onlinePeopleExclOurUser).length &&
             Object.keys(onlinePeopleExclOurUser).map((userId) => (
               <Contact
