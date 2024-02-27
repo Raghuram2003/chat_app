@@ -19,6 +19,7 @@ export default function Chat() {
   //connect to the ws on mount
   useEffect(() => {
     connectToWs();
+    
   }, []);
 
   //scroll auto to the recent message
