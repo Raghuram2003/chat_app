@@ -45,7 +45,11 @@ app.post("/api/register", async (req, res) => {
   const hashedPassword = bcrypt.hashSync(password, salt);
   try {
     const newUser = await User.create({ username, password: hashedPassword });
-    const friendDoc = await Friend.create({ userId: newUser._id,username, friends: [] });
+    const friendDoc = await Friend.create({
+      userId: newUser._id,
+      username,
+      friends: [],
+    });
     jwt.sign({ userId: newUser._id, username }, secret, {}, (err, token) => {
       if (err) throw err;
       res.cookie("token", token).status(201).json({
@@ -115,18 +119,25 @@ app.get("/api/getMessages/:userId", verifyJWT, async (req, res) => {
   res.json(messages);
 });
 
-app.post("/api/addFriend/:userId", verifyJWT, async (req, res) => {
-  const friendUserId = req.params.userId;
+app.post("/api/addFriend/:friendName", verifyJWT, async (req, res) => {
+  const friendUserName = req.params.friendName;
   const userId = req.userData.userId;
-  try{
-    const user = await Friend.findOne({ userId });
-    const friend = await Friend.findOne({userId : friendUserId});
-    res.json({ user: user.userId, friend: friend.userId });
-  }catch(err){
+  try {
+    const friend = await Friend.findOneAndUpdate(
+      { username: friendUserName },
+      { $push: { friends: userId } },
+      { new: true }
+    );
+    const user = await Friend.findOneAndUpdate(
+      { userId: userId },
+      { $push: { friends: friend.userId } },
+      { new: true }
+    );
+    res.json("friend added");
+  } catch (err) {
     console.log(err);
-    res.json(err);
+    res.json("Error");
   }
-  
 });
 
 const server = app.listen(PORT, () => {
