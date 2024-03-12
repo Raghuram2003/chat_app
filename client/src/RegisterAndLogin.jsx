@@ -28,7 +28,7 @@ export default function RegisterAndLogin() {
           onChange={(ev) => setUsername(ev.target.value)}
         />
         <input
-          type="text"
+          type="password"
           placeholder="password"
           className="block w-full rounded-sm p-2 mb-2 border text-center"
           value={password}

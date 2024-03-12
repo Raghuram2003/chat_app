@@ -16,8 +16,10 @@ export default function Chat() {
   const messageRef = useRef();
   const searchRef = useRef(null);
   const [friendBox, setFriendBox] = useState("");
+  // const [isLogout, setIsLogout] = useState(false);
   //connect to the ws on mount
   useEffect(() => {
+    setWs(null);
     connectToWs();
     console.log(id);
   }, []);
@@ -38,13 +40,17 @@ export default function Chat() {
         setMessages([...res.data]);
       });
     }
+    setWs(null);
     connectToWs();
   }, [selectedUserId]);
 
   //get offline people by filterin all users from online people
   useEffect(() => {
+    getPeople();
+  }, [onlinePeople]);
+
+  function getPeople() {
     axios.get("/api/people").then((res) => {
-      // console.log(res.data, id);
       const offlinePeopleArr = res.data
         .filter((person) => person._id !== id)
         .filter((p) => !Object.keys(onlinePeople).includes(p._id));
@@ -52,17 +58,22 @@ export default function Chat() {
       offlinePeopleArr.forEach((p) => {
         offlinePeople[p._id] = p.username;
       });
-      // console.log(offlinePeople);
       setOfflinePeople(offlinePeople);
     });
-  }, [onlinePeople]);
+  }
 
   function connectToWs() {
+    // if (!isLogout) {
     const ws = new WebSocket("ws://localhost:4040");
     // console.log(ws);
     setWs(ws);
     ws.addEventListener("message", handleMessage);
-    ws.addEventListener("close", () => connectToWs());
+    ws.addEventListener("close", function (event) {
+      // Add any actions you want to perform when the WebSocket is closed
+      console.log("WebSocket connection closed with code:", event.code);
+    });
+    // }
+    // ws.addEventListener("close", () => connectToWs());
   }
 
   function showOnlinePeople(peopleArray) {
@@ -73,13 +84,14 @@ export default function Chat() {
     // console.log(people);
 
     setOnlinePeople(people);
+    console.log("online", onlinePeople);
   }
 
   function handleMessage(ev) {
     const messageData = JSON.parse(ev.data);
-    // console.log(messageData);
-    console.log(messageData, messageData.sender, selectedUserId);
+    console.log(messageData);
     if ("online" in messageData) {
+      console.log(messageData.online);
       showOnlinePeople(messageData.online);
     } else if ("text" in messageData) {
       // console.log(messageData);
@@ -104,7 +116,7 @@ export default function Chat() {
           },
         })
       );
-      console.log("ji");
+      console.log(ws);
     } catch (err) {
       console.log(err);
     }
@@ -130,6 +142,11 @@ export default function Chat() {
 
   function logout() {
     axios.post("/api/logout").then(() => {
+      if (ws) {
+        ws.close();
+        console.log("ws clossed");
+      }
+      // setIsLogout(true);
       setWs(null);
       setId(null);
       setUsername(null);
@@ -155,9 +172,10 @@ export default function Chat() {
   async function handleAddFriend(ev) {
     ev.preventDefault();
     console.log(friendBox);
-    const response = axios.post("/api/addFriend/" + friendBox);
+    const response = await axios.post("/api/addFriend/" + friendBox);
     console.log(response);
     setFriendBox("");
+    getPeople();
   }
 
   const onlinePeopleExclOurUser = { ...onlinePeople };

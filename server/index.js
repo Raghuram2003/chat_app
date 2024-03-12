@@ -9,6 +9,8 @@ import WebSocket, { WebSocketServer } from "ws";
 import { Message } from "./models/Message.js";
 import fs from "fs";
 import { Friend } from "./models/Friend.js";
+import { setInterval } from "timers/promises";
+
 config();
 const app = express();
 app.use(express.json());
@@ -102,9 +104,27 @@ app.post("/api/logout", (req, res) => {
   res.cookie("token", "").json("ok");
 });
 
-app.get("/api/people", async (req, res) => {
-  const users = await User.find({}, { _id: 1, username: 1 });
-  res.json(users);
+//  app.get("/api/people", async (req, res) => {
+//   const users = await User.find({}, { _id: 1, username: 1 });
+//   res.json(users);
+// });
+
+app.get("/api/people", verifyJWT, async (req, res) => {
+  const users = await Friend.findOne(
+    { userId: req.userData.userId },
+    { friends: 1 }
+  );
+  const friends = users?.friends;
+  if (friends?.length) {
+    const transformedFriends = friends.map((friend) => ({
+      _id: friend.userId, // Change 'userId' to '_id'
+      username: friend.username,
+    }));
+    // console.log("friens", transformedFriends);
+    res.json(transformedFriends);
+  } else {
+    res.json("No friends");
+  }
 });
 
 app.get("/api/getMessages/:userId", verifyJWT, async (req, res) => {
@@ -112,28 +132,49 @@ app.get("/api/getMessages/:userId", verifyJWT, async (req, res) => {
   const ourUserId = req.userData.userId;
   // const selectedUserRef = await User.findOne({_id:selectedUserId});
   // const ourUserRef = await User.findOne({_id : ourUserId})
+  // const messages = await Message.find({
+  //   $or: [
+  //     { sender: ourUserId, recepient: selectedUserId },
+  //     { sender: selectedUserId, recepient: ourUserId }
+  //   ]
+  // })
+  // .sort({ createdAt: 1 })
+  // .catch(err=>console.log(err));
+  console.log(selectedUserId, ourUserId);
   const messages = await Message.find({
     sender: { $in: [ourUserId, selectedUserId] },
     recepient: { $in: [ourUserId, selectedUserId] },
-  }).sort({ createdAt: 1 });
+  })
+  .sort({ createdAt: 1 })
+  .catch((err) => {
+    console.log("Error querying messages:", err);
+    res.status(500).json({ error: "Internal server error" });
+  });
+  console.log(messages);
   res.json(messages);
 });
 
 app.post("/api/addFriend/:friendName", verifyJWT, async (req, res) => {
   const friendUserName = req.params.friendName;
   const userId = req.userData.userId;
+  const username = req.userData.username;
   try {
     const friend = await Friend.findOneAndUpdate(
       { username: friendUserName },
-      { $push: { friends: userId } },
+      { $push: { friends: { userId, username } } },
       { new: true }
     );
     const user = await Friend.findOneAndUpdate(
       { userId: userId },
-      { $push: { friends: friend.userId } },
+      {
+        $push: {
+          friends: { userId: friend.userId, username: friend.username },
+        },
+      },
       { new: true }
     );
-    res.json("friend added");
+    // console.log(username, friend.username);
+    res.status(200).json({ msg: "friend added", array: friend.friends });
   } catch (err) {
     console.log(err);
     res.json("Error");
@@ -147,19 +188,57 @@ const server = app.listen(PORT, () => {
 const wss = new WebSocketServer({ server });
 wss.on("connection", (con, req) => {
   // get username and userId from the cookie
-  function notifyOnlinePeople() {
+
+  async function notifyOnlinePeople() {
     //all users
     //wss.client[0].id , check for friend , if friend send updates
-    [...wss.clients].forEach((client) => {
-      client.send(
+    function compare(a, b) {
+      if (a.userId < b.userId) {
+        return -1;
+      }
+      if (a.userId > b.userId) {
+        return 1;
+      }
+      return 0;
+    }
+
+    const users = await Friend.findOne({ userId: con.userId });
+    const friends = users?.friends;
+    if (friends?.length) {
+      var FriendsUserId = friends.map((friend) => friend.userId);
+      FriendsUserId = FriendsUserId.map((objectId) => objectId.toString());
+      // console.log("friens", FriendsUserId);
+      var friendsClient = [...wss.clients].filter((client) =>
+        FriendsUserId.includes(client.userId)
+      );
+
+      friendsClient.sort(compare);
+
+      con.send(
         JSON.stringify({
-          online: [...wss.clients].map((c) => ({
+          online: friendsClient.map((c) => ({
             userId: c.userId,
             username: c.username,
           })),
         })
       );
-    });
+      console.log("online sent");
+
+      // [...wss.clients].forEach((client) => {
+      //   // console.log(FriendsUserId, client.userId, con.userId);
+      //   if (FriendsUserId.includes(client.userId)) {
+      //     // console.log("yes");
+      //     client.send(
+      //       JSON.stringify({
+      //         online: [...wss.clients].filter((c)=> FriendsUserId.includes(c.userId)).map((c) => ({
+      //           userId: c.userId,
+      //           username: c.username,
+      //         })),
+      //       })
+      //     );
+      //   }
+      // });
+    }
   }
 
   con.isAlive = true;
@@ -186,7 +265,6 @@ wss.on("connection", (con, req) => {
       const token = tokenCookieString.split("=")[1];
       if (token) {
         jwt.verify(token, secret, {}, (err, data) => {
-          // //console.log(data);
           const { username, userId } = data;
           con.userId = userId;
           con.username = username;
@@ -210,6 +288,7 @@ wss.on("connection", (con, req) => {
         console.log("file saved at ", path);
       });
     }
+    console.log(recepient, text);
     if ((recepient && text) || (recepient && file)) {
       const messageDoc = await Message.create({
         sender: con.userId,
@@ -217,7 +296,7 @@ wss.on("connection", (con, req) => {
         text,
         file: fileName,
       });
-
+      console.log("messageDoc", messageDoc);
       [...wss.clients]
         .filter((c) => c.userId === recepient)
         .forEach((c) => {
@@ -231,6 +310,7 @@ wss.on("connection", (con, req) => {
                 file: fileName,
               })
             );
+            console.log("message sent", text);
           } catch (err) {
             console.log(err);
           }
@@ -240,5 +320,6 @@ wss.on("connection", (con, req) => {
 
   //send the online users to every online client
   notifyOnlinePeople();
+  setInterval(notifyOnlinePeople, 5 * 1000);
 });
 wss.on("error", console.error);
