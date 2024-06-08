@@ -10,6 +10,7 @@ import { Message } from "./models/Message.js";
 import fs from "fs";
 import { Friend } from "./models/Friend.js";
 import { setInterval } from "timers/promises";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 config();
 const app = express();
@@ -24,6 +25,10 @@ try {
 } catch (e) {
   console.log("db not connected");
 }
+
+const s3 = new S3Client({
+  region: "ap-southeast-2",
+});
 
 function verifyJWT(req, res, next) {
   const token = req.cookies?.token;
@@ -120,7 +125,6 @@ app.get("/api/people", verifyJWT, async (req, res) => {
       _id: friend.userId, // Change 'userId' to '_id'
       username: friend.username,
     }));
-    // console.log("friens", transformedFriends);
     res.json(transformedFriends);
   } else {
     res.json("No friends");
@@ -130,8 +134,6 @@ app.get("/api/people", verifyJWT, async (req, res) => {
 app.get("/api/getMessages/:userId", verifyJWT, async (req, res) => {
   const selectedUserId = req.params.userId;
   const ourUserId = req.userData.userId;
-  // const selectedUserRef = await User.findOne({_id:selectedUserId});
-  // const ourUserRef = await User.findOne({_id : ourUserId})
   // const messages = await Message.find({
   //   $or: [
   //     { sender: ourUserId, recepient: selectedUserId },
@@ -140,17 +142,16 @@ app.get("/api/getMessages/:userId", verifyJWT, async (req, res) => {
   // })
   // .sort({ createdAt: 1 })
   // .catch(err=>console.log(err));
-  console.log(selectedUserId, ourUserId);
   const messages = await Message.find({
     sender: { $in: [ourUserId, selectedUserId] },
     recepient: { $in: [ourUserId, selectedUserId] },
   })
-  .sort({ createdAt: 1 })
-  .catch((err) => {
-    console.log("Error querying messages:", err);
-    res.status(500).json({ error: "Internal server error" });
-  });
-  console.log(messages);
+    .sort({ createdAt: 1 })
+    .catch((err) => {
+      console.log("Error querying messages:", err);
+      res.status(500).json({ error: "Internal server error" });
+    });
+  // console.log(messages);
   res.json(messages);
 });
 
@@ -222,7 +223,6 @@ wss.on("connection", (con, req) => {
           })),
         })
       );
-      console.log("online sent");
 
       // [...wss.clients].forEach((client) => {
       //   // console.log(FriendsUserId, client.userId, con.userId);
@@ -265,6 +265,7 @@ wss.on("connection", (con, req) => {
       const token = tokenCookieString.split("=")[1];
       if (token) {
         jwt.verify(token, secret, {}, (err, data) => {
+          if (err) console.log(err);
           const { username, userId } = data;
           con.userId = userId;
           con.username = username;
@@ -273,7 +274,6 @@ wss.on("connection", (con, req) => {
     }
   }
 
-  // //console.log(token);
   con.on("message", async (message, isBinary) => {
     const messageData = JSON.parse(message.toString("utf-8"));
     const { recepient, text, file } = messageData.message;
@@ -286,19 +286,44 @@ wss.on("connection", (con, req) => {
       const bufferData = new Buffer.from(file.data.split(",")[1], "base64");
       fs.writeFile(path, bufferData, () => {
         console.log("file saved at ", path);
+        fs.readFile(path, async (err, fileDataS3) => {
+          if (err) {
+            console.error("error while reading file", err);
+            return;
+          }
+          try {
+            const command = new PutObjectCommand({
+              Body: fileDataS3,
+              Bucket: "minor-project-rao",
+              Key: fileName,
+            });
+            const res = await s3.send(command);
+            console.log("file uploaded");
+            fs.unlink(path, (err) => {
+              if (err) {
+                console.error("Error deleting the file", err);
+                return;
+              }
+              console.log("File deleted from local file system");
+            });
+          } catch (err) {
+            console.error("error uploading to s3", err);
+          }
+        });
       });
     }
-    console.log(recepient, text);
+    // console.log(recepient, text);
     if ((recepient && text) || (recepient && file)) {
+      console.log({ userId: con.userId, username: con.username });
       const messageDoc = await Message.create({
         sender: con.userId,
         recepient,
         text,
         file: fileName,
       });
-      console.log("messageDoc", messageDoc);
+      // console.log("messageDoc", messageDoc);
       [...wss.clients]
-        .filter((c) => c.userId === recepient)
+        .filter((c) => c.userId === recepient || c.userId === con.userId)
         .forEach((c) => {
           try {
             c.send(
@@ -310,7 +335,6 @@ wss.on("connection", (con, req) => {
                 file: fileName,
               })
             );
-            console.log("message sent", text);
           } catch (err) {
             console.log(err);
           }

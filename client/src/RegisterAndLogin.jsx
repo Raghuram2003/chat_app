@@ -1,6 +1,7 @@
 import axios from "axios";
 import { useContext, useState } from "react";
 import { UserContext } from "./UserContext.jsx";
+import { toast, Toaster } from "react-hot-toast";
 
 export default function RegisterAndLogin() {
   const [username, setUsername] = useState("");

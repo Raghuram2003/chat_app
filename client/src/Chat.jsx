@@ -154,7 +154,6 @@ export default function Chat() {
   }
 
   function sendFile(ev) {
-    // console.log(ev.target.files[0]);
     const reader = new FileReader();
     reader.readAsDataURL(ev.target.files[0]);
     reader.onload = () => {
@@ -163,6 +162,10 @@ export default function Chat() {
         data: reader.result,
       });
     };
+    axios.get("/api/getMessages/" + selectedUserId).then((res) => {
+      // console.log(res.data);
+      setMessages([...res.data]);
+    });
   }
 
   function focusSearch() {
@@ -327,7 +330,7 @@ export default function Chat() {
                           </svg>
                           <a
                             href={
-                              "http://localhost:4040/uploads/" + message.file
+                              "https://minor-project-rao.s3.ap-southeast-2.amazonaws.com/" + message.file
                             }
                             rel="noreferrer"
                             target="_blank"
