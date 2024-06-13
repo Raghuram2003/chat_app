@@ -11,6 +11,7 @@ import fs from "fs";
 import { Friend } from "./models/Friend.js";
 import { setInterval } from "timers/promises";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { fromEnv } from "@aws-sdk/credential-providers";
 
 config();
 const app = express();
@@ -28,7 +29,10 @@ try {
 
 const s3 = new S3Client({
   region: "ap-southeast-2",
+  credentials : fromEnv()
 });
+
+
 
 function verifyJWT(req, res, next) {
   const token = req.cookies?.token;
@@ -61,11 +65,12 @@ app.post("/api/register", async (req, res) => {
       if (err) throw err;
       res.cookie("token", token).status(201).json({
         id: newUser._id,
+        message : "User created"
       });
     });
   } catch (err) {
-    console.log(err);
-    res.status(501);
+    console.log('error');
+    res.status(501).json({message : "Username already exists"});
   }
 });
 app.get("/api/profile", (req, res) => {
@@ -94,19 +99,20 @@ app.post("/api/login", async (req, res) => {
           if (err) throw err;
           res.cookie("token", token).status(201).json({
             id: foundUser._id,
+            message :  "Login Successful"
           });
         }
       );
     } else {
-      res.status(401).send("no in");
+      res.status(401).json({message : "Not authenticated"});
     }
   } else {
-    res.status(404).send("No user found");
+    res.status(404).json({message : "User not found"});
   }
 });
 
 app.post("/api/logout", (req, res) => {
-  res.cookie("token", "").json("ok");
+  res.cookie("token", "").status(201).json("ok");
 });
 
 //  app.get("/api/people", async (req, res) => {
@@ -208,7 +214,6 @@ wss.on("connection", (con, req) => {
     if (friends?.length) {
       var FriendsUserId = friends.map((friend) => friend.userId);
       FriendsUserId = FriendsUserId.map((objectId) => objectId.toString());
-      // console.log("friens", FriendsUserId);
       var friendsClient = [...wss.clients].filter((client) =>
         FriendsUserId.includes(client.userId)
       );
@@ -284,7 +289,8 @@ wss.on("connection", (con, req) => {
       fileName = Date.now() + "." + ext;
       const path = "./uploads/" + fileName;
       const bufferData = new Buffer.from(file.data.split(",")[1], "base64");
-      fs.writeFile(path, bufferData, () => {
+      //write the bufferData into the upload folder and upload it to s3 bucket , then unlink the file from upload
+      fs.writeFile(path, bufferData, async() => {
         console.log("file saved at ", path);
         fs.readFile(path, async (err, fileDataS3) => {
           if (err) {
@@ -297,7 +303,7 @@ wss.on("connection", (con, req) => {
               Bucket: "minor-project-rao",
               Key: fileName,
             });
-            const res = await s3.send(command);
+            await s3.send(command);
             console.log("file uploaded");
             fs.unlink(path, (err) => {
               if (err) {
@@ -312,16 +318,13 @@ wss.on("connection", (con, req) => {
         });
       });
     }
-    // console.log(recepient, text);
     if ((recepient && text) || (recepient && file)) {
-      console.log({ userId: con.userId, username: con.username });
       const messageDoc = await Message.create({
         sender: con.userId,
         recepient,
         text,
         file: fileName,
       });
-      // console.log("messageDoc", messageDoc);
       [...wss.clients]
         .filter((c) => c.userId === recepient || c.userId === con.userId)
         .forEach((c) => {

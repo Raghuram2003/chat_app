@@ -5,6 +5,8 @@ import SendButton from "./SendButton";
 import { uniqBy } from "lodash";
 import axios from "axios";
 import Contact from "./Contact";
+import toast, { Toaster } from "react-hot-toast";
+// import FileDisplay from "./FileDisplay";
 export default function Chat() {
   const [ws, setWs] = useState(null);
   const { username, id, setUsername, setId } = useContext(UserContext);
@@ -140,17 +142,22 @@ export default function Chat() {
     }
   }
 
-  function logout() {
-    axios.post("/api/logout").then(() => {
+  async function logout() {
+    try {
+      const response = await axios.post("/api/logout");
+      if(response.status===201){
+        toast.success("Logout Successful");
+      }
       if (ws) {
         ws.close();
         console.log("ws clossed");
       }
-      // setIsLogout(true);
       setWs(null);
       setId(null);
       setUsername(null);
-    });
+    } catch (err) {
+      console.log(err);
+    }
   }
 
   function sendFile(ev) {
@@ -312,34 +319,39 @@ export default function Chat() {
                       }
                     >
                       {message.text}
-                      {message.file && (
-                        <div className="flex gap-2 items-center">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            strokeWidth={1.5}
-                            stroke="currentColor"
-                            className="w-5 h-5"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13"
-                            />
-                          </svg>
-                          <a
-                            href={
-                              "https://minor-project-rao.s3.ap-southeast-2.amazonaws.com/" + message.file
-                            }
-                            rel="noreferrer"
-                            target="_blank"
-                            className="underline"
-                          >
-                            {message.file}
-                          </a>
-                        </div>
-                      )}
+                      {
+                        message.file && (
+                          <div className="flex gap-2 items-center">
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              strokeWidth={1.5}
+                              stroke="currentColor"
+                              className="w-5 h-5"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13"
+                              />
+                            </svg>
+
+                            <a
+                              href={
+                                "https://minor-project-rao.s3.ap-southeast-2.amazonaws.com/" +
+                                message.file
+                              }
+                              rel="noreferrer"
+                              target="_blank"
+                              className="underline"
+                            >
+                              {message.file}
+                            </a>
+                          </div>
+                        )
+                        /* <FileDisplay message={message} />  */
+                      }
                     </div>
                   </div>
                 ))}

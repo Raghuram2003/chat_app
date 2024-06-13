@@ -10,13 +10,36 @@ export default function RegisterAndLogin() {
   const { setUsername: setLoggedInUsername, setId } = useContext(UserContext);
   async function handleSubmit(ev) {
     ev.preventDefault();
-    const { data } = await axios.post("/api/" + loginOrRegister, {
-      username,
-      password,
-    });
-    console.log(data);
-    setLoggedInUsername(username);
-    setId(data.id);
+    try {
+      const response = await axios.post("/api/" + loginOrRegister, {
+        username,
+        password,
+      });
+      if (loginOrRegister === "register") {
+        if (response.status === 201) {
+          toast.success(response.data.message);
+        }
+      } else {
+        console.log(response.status)
+        if (response.status === 201) {
+          toast.success(response.data.message);
+        }
+      }
+      console.log(response.data);
+      setLoggedInUsername(username);
+      setId(response.data.id);
+    } catch (err) {
+      console.log(err);
+      if (err.response) {
+        if (loginOrRegister === "register") {
+          if (err.response.status === 501) {
+            toast.error("User already exists");
+          }
+        } else {
+          toast.error(err.data.message);
+        }
+      }
+    }
   }
   return (
     <div className="bg-slate-300 h-screen flex items-center">
