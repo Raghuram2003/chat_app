@@ -5,7 +5,7 @@ import SendButton from "./SendButton";
 import { uniqBy } from "lodash";
 import axios from "axios";
 import Contact from "./Contact";
-import toast, { Toaster } from "react-hot-toast";
+import toast from "react-hot-toast";
 // import FileDisplay from "./FileDisplay";
 export default function Chat() {
   const [ws, setWs] = useState(null);
