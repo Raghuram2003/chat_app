@@ -145,7 +145,7 @@ export default function Chat() {
   async function logout() {
     try {
       const response = await axios.post("/api/logout");
-      if(response.status===201){
+      if (response.status === 201) {
         toast.success("Logout Successful");
       }
       if (ws) {

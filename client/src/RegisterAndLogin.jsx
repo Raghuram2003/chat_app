@@ -43,17 +43,18 @@ export default function RegisterAndLogin() {
   }
   return (
     <div className="bg-slate-300 h-screen flex items-center">
-      <form className="w-64 mx-auto mb-12" onSubmit={handleSubmit}>
+      <form className="w-64 mx-auto mb-12 " onSubmit={handleSubmit}>
+        {/* <p className="text-center text-2xl m-2">{loginOrRegister[0].toUpperCase() + loginOrRegister.slice(1) + " form"}</p> */}
         <input
           type="text"
-          placeholder="username"
+          placeholder="Username"
           className="block w-full rounded-sm p-2 mb-2 border text-center "
           value={username}
           onChange={(ev) => setUsername(ev.target.value)}
         />
         <input
           type="password"
-          placeholder="password"
+          placeholder="Password"
           className="block w-full rounded-sm p-2 mb-2 border text-center"
           value={password}
           onChange={(ev) => setpassword(ev.target.value)}
